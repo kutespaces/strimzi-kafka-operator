@@ -35,14 +35,59 @@ main() {
   echo "creating k3d cluster"
   k3d cluster create -c .devcontainer/k3d.yaml
 
+  mkdir -p output
+  cat ~/.kube/config > output/kubeconfig.yaml
+
   # Activate kubectl autocompletion for zsh. Not everybody wants to use k9s.
   echo 'source <(kubectl completion zsh)' >>~/.zshrc
   echo 'alias k=kubectl' >>~/.zshrc
-  source ~/.zshrc
 
-  # Deploy k8s resources
-  kubectl apply -k .devcontainer/manifests/argocd
-  kubectl apply -k .devcontainer/manifests/git-repo-server
+  # install local git server and configure git client to use it
+  kubectl apply -k manifests/apps/git-repo-server
+
+  GIT_REMOTE_URL="http://git.127.0.0.1.nip.io:8080/git/manifests"
+
+  # Change to the repository directory
+  pushd "./manifests" > /dev/null
+
+  git config --global init.defaultBranch main
+  # Initialize the repository if it's not already initialized and add the remote
+  if [ ! -d ".git" ]; then
+      git init
+      git remote add origin "$GIT_REMOTE_URL"
+  fi
+
+  git add -A
+  git diff --staged --quiet || git -c user.name="Kutespaces" -c user.email="admin@kutespaces.net" commit -m "Initial commit."
+
+  # Wait for the Git server to be ready with a timeout
+  ELAPSED_TIME=0
+  until curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 $GIT_REMOTE_URL/info/refs?service=git-receive-pack | grep -q "200" || [ $ELAPSED_TIME -ge 90 ]; do
+    echo "Waiting for Git server to be ready..."
+    sleep 5
+    ELAPSED_TIME=$((ELAPSED_TIME+5))
+  done
+  git push -u origin main
+  # Change back to the original directory
+  popd > /dev/null
+
+
+  kubectl apply -k manifests/apps/argocd/
+
+  # Wait for the argocd application CRD to be installed
+  ELAPSED_TIME=0
+  until kubectl get crd applications.argoproj.io &> /dev/null || [ $ELAPSED_TIME -ge 90 ]; do
+    echo "Waiting for Argo CD Application CRD to be installed..."
+    sleep 5
+    ELAPSED_TIME=$((ELAPSED_TIME+5))
+  done
+  echo "Waiting for argocd repo server to be ready"
+  kubectl wait --namespace argocd --for=condition=Ready pod -l app.kubernetes.io/name=argocd-repo-server --timeout=90s
+  echo "Argocd repo server is ready"
+
+  # prevent connection errors during codespace startup
+  sleep 30
+  kubectl apply -k manifests/
 
   echo "on-create end"
   echo "$(date +'%Y-%m-%d %H:%M:%S')    on-create end" >> "$HOME/status"

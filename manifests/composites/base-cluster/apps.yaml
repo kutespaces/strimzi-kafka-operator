@@ -1,0 +1,25 @@
+composite-base:
+  applications:
+    01-git-repo-server:
+      path: apps/git-repo-server
+      syncWave: 100
+    02-argocd:
+      path: apps/argocd
+      syncWave: 200
+    03-strimzi-operator:
+      path: apps/strimzi-operator
+      namespace: strimzi-operator
+      source:
+        helm:
+          releaseName: strimzi-operator
+      syncWave: 300
+      ignoreDifferences:
+      # ignore differences in CRD schemas. We will not modify CRD schemas per hand in the strimzi operator.
+      # without this there will be differences due to automatically omitted `required: []` fields in the schema.
+      - group: apiextensions.k8s.io
+        kind: CustomResourceDefinition
+        jsonPointers:
+        - /spec/versions/0/schema
+    04-kafka-demo:
+      path: apps/kafka-demo
+      syncWave: 400

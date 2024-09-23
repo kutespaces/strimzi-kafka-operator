@@ -1,0 +1,5 @@
+apiVersion: v2
+name: composite-base
+description: A Helm chart that renders Argo CD application for each specified app.
+type: application
+version: 0.1.0

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: git-repo
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  name: local-repo
+  project: default
+  type: git
+  url: http://git-repo-server.git-repo-server.svc.cluster.local:/git/manifests
+  insecure: 'true'

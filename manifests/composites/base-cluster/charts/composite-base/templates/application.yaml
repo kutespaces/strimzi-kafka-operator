@@ -1,0 +1,71 @@
+{{- range $name, $app := .Values.applications }}
+{{- $effectiveName := $app.nameOverride | default $name }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ if $.Values.spec.namePrefix }}{{ $.Values.spec.namePrefix }}-{{ end }}{{ $effectiveName }}
+  namespace: {{ $.Values.argocd.namespace }}
+  labels:
+    {{- with (merge $.Values.argocd.labels (.labels | default dict))  }}
+    {{- . | toYaml | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- if $app.syncWave }}
+    argocd.argoproj.io/sync-wave: "{{ $app.syncWave }}"
+    {{- end }}
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    {{- $namespace := $app.namespace | default $.Values.spec.destination.namespace }}
+    {{- if $namespace }}
+    namespace: {{ $namespace }}
+    {{- end }}
+    name: {{ $.Values.spec.destination.name }}
+  project: default
+  {{- if $app.syncPolicy }}
+  syncPolicy:
+    {{- .syncPolicy | toYaml | nindent 4 }}
+  {{- else if or $namespace $.Values.spec.autoSync }}
+  syncPolicy:
+    {{- if $namespace }}
+    syncOptions:
+      - CreateNamespace=true
+    {{- end }}
+    {{- with $.Values.spec.autoSync }}
+    automated:
+      {{- . | toYaml | nindent 6 }}
+    {{- end }}
+    {{- with $.Values.spec.retry }}
+    retry:
+      {{- toYaml $.Values.spec.retry | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  source:
+    path: {{ $app.path }}
+    repoURL: {{ $.Values.spec.source.repoURL }}
+    targetRevision: {{ $.Values.spec.source.targetRevision }}
+    {{- with $app.source  }}
+    {{- with .helm  }}
+    helm:
+      {{- with .values }}
+      values: {{ (tpl . $) | toYaml | indent 6 | trim}}
+      {{- end }}
+      {{- with .releaseName }}
+      releaseName: {{ (tpl . $) | quote }}
+      {{- end }}
+      {{- with .parameters }}
+      parameters:
+        {{- range $k, $v := . }}
+        - name: "{{ $k }}"
+          value: {{ $v | toYaml }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+  {{- with $app.ignoreDifferences }}
+  ignoreDifferences:
+    {{- . | toYaml | nindent 4}}
+  {{- end }}
+{{- end }}

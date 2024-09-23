@@ -13,7 +13,7 @@ volumes:
   - server:*
 
 ports:
-- port: 8000:80 # same as `--port '8080:80@loadbalancer'`
+- port: 8080:80 # same as `--port '8080:80@loadbalancer'`
   nodeFilters:
   - loadbalancer
 

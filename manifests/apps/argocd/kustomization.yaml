@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+
+# taken from https://raw.githubusercontent.com/argoproj/argo-cd/2.12.3/manifests/install.yaml
+resources:
+- namespace.yaml
+- argocd.yaml
+- repo.yaml
+- ingress.yaml
+
+patches:
+- patch: |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: argocd-cm
+    data:
+      # we use annotations for tracking ownership because this avoids certain compatibility problems
+      application.resourceTrackingMethod: annotation
+      # ensures that applications are only healthy if all their resources are healthy
+      # this is required for application dependencies to work properly:
+      # https://codefresh.io/blog/argo-cd-application-dependencies/
+      resource.customizations.health.argoproj.io_Application: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+        end
+        return hs
+- patch: |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: argocd-cmd-params-cm
+    data:
+      # enable insecure access to the argo cd dashboard
+      server.insecure: "true"
+      timeout.reconciliation: "5s"
+- patch: |-
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: argocd-secret
+    stringData:
+      server.secretkey: F0BUqK8K7wOuT4K7dPsXyEOwOTA4m0tQNCdXyLinKaw=
+      # set the password to 'admin' for this demo environment
+      admin.password: $2y$10$RKOaJTo6/gnMc37UrrgOYuV3OEHDRa6Ki34AMc7LcpqMgFSygrko2
+
+namespace: argocd

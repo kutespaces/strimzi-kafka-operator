@@ -1,0 +1,4 @@
+{
+    "revision": "main",
+    "destinationOverride": "in-cluster"
+}

@@ -1,0 +1,12 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: demo-topic
+  labels:
+    strimzi.io/cluster: kafka-demo
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: -1 # Keep messages forever
+    min.insync.replicas: 2 # Recommended here: https://strimzi.io/docs/operators/latest/deploying.html#ref-topic-replication-str

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: base-cluster
+description: This is the ArgoCD app of app that deploys the cluster's apps.
+type: application
+version: 0.1.0
+
+dependencies:
+- name: composite-base
+  version: 0.1.0
+  repository: "file://./charts/composite-base"

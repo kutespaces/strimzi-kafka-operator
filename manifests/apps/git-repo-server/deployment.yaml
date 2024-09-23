@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git-repo-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: git-repo-server
+  template:
+    metadata:
+      labels:
+        app: git-repo-server
+    spec:
+      initContainers:
+      - name: init-repo
+        image: alpine/git
+        command:
+        - sh
+        - -c
+        - |
+          git init --bare /git/manifests.git
+          cd /git/manifests.git
+          git symbolic-ref HEAD refs/heads/main
+          git config http.receivepack true
+        volumeMounts:
+        - name: git-repo-volume
+          mountPath: /git
+      containers:
+      - name: git-repo-server
+        image: ghcr.io/kutespaces/simple-git-http-server:latest
+        volumeMounts:
+        - name: git-repo-volume
+          mountPath: /git
+        readinessProbe:
+          httpGet:
+            path: /git/manifests/info/refs?service=git-receive-pack
+            port: 80
+      volumes:
+      - name: git-repo-volume
+        emptyDir: {}

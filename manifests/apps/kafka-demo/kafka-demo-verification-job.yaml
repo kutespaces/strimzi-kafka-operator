@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-demo-verification-job
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      initContainers:
+      - name: kafka-producer
+        image: confluentinc/cp-kafka
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -euo pipefail
+
+          # Wait for Kafka bootstrap server to be available
+          while ! nc -z -w30 kafka-demo-kafka-bootstrap 9092 >/dev/null 2>&1; do
+              echo "$(date '+%Y-%m-%d %H:%M:%S') - Waiting for Kafka bootstrap server to be available on kafka-demo-kafka-bootstrap:9092."
+              sleep 5
+          done
+
+          echo "$(date '+%Y-%m-%d %H:%M:%S') - Kafka bootstrap server is available."
+
+          # Wait until the topic 'demo-topic' exists
+          until kafka-topics --list --bootstrap-server kafka-demo-kafka-bootstrap:9092 | grep -q "^demo-topic$"; do
+              echo "$(date '+%Y-%m-%d %H:%M:%S') - Kafka is available but the topic 'demo-topic' does not exist."
+              sleep 5
+          done
+
+          echo "$(date '+%Y-%m-%d %H:%M:%S') - Kafka topic 'demo-topic' exists."
+
+          MESSAGE="Hallo Welt! Liebe Grüße von Nico!"
+          echo $MESSAGE | kafka-console-producer --broker-list kafka-demo-kafka-bootstrap:9092 --topic demo-topic
+          echo "$(date '+%Y-%m-%d %H:%M:%S') - Message '$MESSAGE' sent to Kafka"
+      containers:
+      - name: kafka-consumer
+        image: confluentinc/cp-kafka
+        command:
+          - /bin/sh
+          - -c
+          - |
+            set -euo pipefail
+
+            MESSAGE=$(kafka-console-consumer --bootstrap-server kafka-demo-kafka-bootstrap:9092 --topic demo-topic --from-beginning --max-messages 1 2>/dev/null)
+
+            if [ -n "$MESSAGE" ]; then
+              echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] Successfully consumed a message from 'demo-topic': '$MESSAGE'"
+              exit 0
+            else
+              echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] No messages read from 'demo-topic'."
+              exit 1
+            fi
+      restartPolicy: Never
